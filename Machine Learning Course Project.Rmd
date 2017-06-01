@@ -1,0 +1,197 @@
+---
+title: "Machine Learning Course Project"
+author: "David Fernandez Jimenez"
+date: "29/5/2017"
+output: 
+html_document:
+        keep_md: yes
+---
+
+## Executive Summary
+
+The aim of this project is to develop a machine learning algorithm in order to be able to predict if the subject is lifting the barbell according to the specification or not. In case he/she is committing any mistake when lifting the barbell this would be classified as well in four different types.
+
+## Summary of the data and a basic exploratory data analysis
+
+The dataset collects the measurements of four sensors distributed among the body of the person who is doing the barbell lifting and the dumbbell itself. Three of them calculate the orientation of the arm, the forearm and the belt and last one calculates the orientation of the dumbbell. According to these values the activity would be classified in five ways: according to the specification (A), throwing the elbows to the front (B), lifting the dumbbell only halfway (C), lowering the dumbbell only halfway (D) and throwing the hips to the front (E).
+
+In order to perform some basic exploratory data analyses I am going to process this data so all the information available would be easier to 
+understand:
+```{r,cache=TRUE}
+
+training_data<-read.csv("https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv")
+
+testing_data<-read.csv("https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv")
+
+set.seed(32323)
+
+library(caret)
+
+#head(training_data)
+
+#head(testing_data)
+
+#names(training_data)==names(testing_data)
+```
+At first sight we can see in the appendix that both training dataset and testing datasets have a great number of variables which value is NA or missing. The next step would be to eliminate all those variable as they do not provide important information. Before doing that it has been checked that these variables has almost the same values in the testing dataset.
+
+```{r,cache=TRUE}
+
+training_data_2<-training_data
+
+testing_data_2<-testing_data
+
+#Removing the variables with NA values
+
+training_data_2<-training_data_2[ , ! apply( training_data_2 , 2 , function(x) any(is.na(x)) ) ]
+
+#Removing the variables with no values
+i<-1
+
+a<-0
+
+for(j in 1:ncol(training_data_2)){
+        if (as.character(training_data_2[1,j]) == "") {a[i]<-j ;i<-i+1}
+}
+
+training_data_2<-training_data_2[ , -c(a)]
+
+#Removing the first 7 column of the original dataset as they are not
+#going to be used develop the algorithm
+
+training_data_2<-training_data_2[,-c(1,2,3,4,5,6,7)]
+
+#Finally the testing dataset is modified to have the same variables as
+#the training dataset
+
+training_data_2_transf<-training_data_2[,!names(training_data_2) %in% c("classe")]
+
+testing_data_2<-testing_data_2[,names(training_data_2_transf)]
+
+```
+
+## Model Selection
+
+Once the training dataset and the testing dataset are ready the next will be to split the training dataset in six equal parts. This partition will provide three differents dataset to train the algorithm and other three different datasets to validate it.
+```{r,cache=TRUE}
+
+folds<-createFolds(y=training_data_2$classe,k=6,list = TRUE,returnTrain = FALSE)
+
+sapply(folds,length)
+
+training1<-training_data_2[folds$Fold1,]
+
+validation1<-training_data_2[folds$Fold2,]
+
+training2<-training_data_2[folds$Fold3,]
+
+validation2<-training_data_2[folds$Fold4,]
+
+training3<-training_data_2[folds$Fold5,]
+
+validation3<-training_data_2[folds$Fold6,]
+
+```
+During the course there have been seen a lot of different types of machine learning algorithms which would be possible to apply in this case. However there are two of them that highlights from the rest. Random Forests and Boosting are two of the most widely used and highly accurate methods for prediction. With this fact in mind, there are going to be trained three random forests algorithms and three boosting algorithms in order to average the results and determine which method is slightly best for this particular dataset.
+
+```{r,cache=TRUE,results='hide'}
+# Algorithm 1 Random Forest
+
+modFit_RF_1<-train(classe~.,method="rf",data=training1)
+
+pred1<-predict(modFit_RF_1,validation1)
+
+# Algorithm 2 Random Forest
+
+modFit_RF_2<-train(classe~.,method="rf",data=training2)
+
+pred2<-predict(modFit_RF_2,validation2)
+
+# Algorithm 3 Random Forest
+
+modFit_RF_3<-train(classe~.,method="rf",data=training3)
+
+pred3<-predict(modFit_RF_3,validation3)
+
+```
+
+```{r,cache=TRUE}
+# Algorithm 1 Random Forest
+
+confusionMatrix(pred1,validation1$classe)
+
+# Algorithm 2 Random Forest
+
+confusionMatrix(pred2,validation2$classe)
+
+# Algorithm 3 Random Forest
+
+confusionMatrix(pred3,validation3$classe)
+
+```
+
+For the Random Forests algorithms the average accuracy is 0.968 with the worst 95% confidence interval of (0.957,0.970)
+
+Let see now what are the results for the boosting algorithms:
+
+```{r,cache=TRUE,eval=TRUE,results='hide'}
+# Algorithm 1 Boosting
+modFit_B_1<-train(classe~.,method="gbm",data=training1)
+
+pred1_B<-predict(modFit_B_1,validation1)
+
+# Algorithm 2 Boosting
+
+modFit_B_2<-train(classe~.,method="gbm",data=training2)
+
+pred2_B<-predict(modFit_B_2,validation2)
+
+
+# Algorithm 3 Boosting
+
+modFit_B_3<-train(classe~.,method="gbm",data=training3)
+
+pred3_B<-predict(modFit_B_3,validation3)
+
+```
+
+
+```{r,cache=TRUE}
+# Algorithm 1 Boosting
+
+confusionMatrix(pred1_B,validation1$classe)
+
+# Algorithm 2 Boosting
+
+confusionMatrix(pred2_B,validation2$classe)
+
+# Algorithm 3 Boosting
+
+confusionMatrix(pred3_B,validation3$classe)
+
+```
+In this case the average accuracy is 0.946 with the worst 95% confidence interval of (0.931,0.948).
+
+For this particular datasets the Random Forest algorithms have shown better results in order to predict the classe of the dumbbell lifting. Among the three algorithms developed the one with the best results is the number two so it will be selected as our definitive algorithm.
+
+As the algorithm has been developed splitting the training set in a new training set and a validation set, the results obtained when applying the algorithm to these validation sets should be very close to what we would obtain in an out sample of dataset. 
+
+## Applying the random forest algorithm to the testing dataset
+
+```{r,cache=TRUE}
+Outsample_Prediction<-predict(modFit_RF_2,newdata=data.frame(testing_data_2))
+
+Outsample_Prediction
+
+```
+
+## Appendix
+
+```{r,cache=FALSE}
+
+head(training_data)
+
+head(testing_data)
+
+names(training_data)==names(testing_data)
+```
